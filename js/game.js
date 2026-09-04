@@ -21,6 +21,80 @@ const TIERS = [
 ];
 const SPAWN_WEIGHTS = [38, 27, 18, 12, 5];
 
+/* ===================== Localization ===================== */
+// Platform requirement §2.14: detect the player's language via the SDK
+// (YSDK.getLanguage(), backed by ysdk.environment.i18n.lang) instead of
+// hardcoding one. Unrecognized languages fall back to Russian, since
+// that's this game's primary audience on Yandex Games.
+const LANGUAGES = {
+  ru: {
+    title: "Слияние планет",
+    loading_sub: "Загрузка космоса…",
+    score_label: "Счёт",
+    best_label: "Рекорд",
+    next_label: "Далее",
+    sound_label: "Звук",
+    intro_p1: "Роняй небесные тела и соединяй одинаковые — они превратятся в объект покрупнее.",
+    intro_p2: "Дойди до Чёрной дыры и не дай башне переполниться!",
+    play_btn: "Играть",
+    gameover_title: "Коллапс!",
+    gameover_your_score: "Ваш счёт",
+    new_record: "Новый рекорд!",
+    record_label: "Рекорд: {n}",
+    revive_btn: "▶ Посмотреть рекламу и продолжить",
+    revive_loading: "Загрузка…",
+    revive_unavailable: "Реклама недоступна",
+    restart_btn: "Ещё раз",
+    pause_title: "Пауза",
+    resume_btn: "Продолжить",
+    combo_text: "Комбо x{n}!",
+  },
+  en: {
+    title: "Merge Planets",
+    loading_sub: "Loading the cosmos…",
+    score_label: "Score",
+    best_label: "Best",
+    next_label: "Next",
+    sound_label: "Sound",
+    intro_p1: "Drop celestial bodies and merge matching ones — they'll grow into something bigger.",
+    intro_p2: "Reach the Black Hole before the tower overflows!",
+    play_btn: "Play",
+    gameover_title: "Collapse!",
+    gameover_your_score: "Your score",
+    new_record: "New record!",
+    record_label: "Best: {n}",
+    revive_btn: "▶ Watch an ad to continue",
+    revive_loading: "Loading…",
+    revive_unavailable: "Ad unavailable",
+    restart_btn: "Play again",
+    pause_title: "Paused",
+    resume_btn: "Resume",
+    combo_text: "Combo x{n}!",
+  },
+};
+
+let currentLang = "ru";
+
+function t(key, params = {}) {
+  let text = LANGUAGES[currentLang]?.[key] ?? LANGUAGES.ru[key] ?? key;
+  Object.keys(params).forEach((k) => {
+    text = text.replace(new RegExp(`\\{${k}\\}`, "g"), params[k]);
+  });
+  return text;
+}
+
+function applyLanguage(lang) {
+  currentLang = LANGUAGES[lang] ? lang : "ru";
+  document.documentElement.lang = currentLang;
+  document.title = t("title");
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  soundBtn.setAttribute("aria-label", t("sound_label"));
+  soundBtn.setAttribute("title", t("sound_label"));
+  if (state === "gameover") renderGameOverTexts();
+}
+
 /* ===================== World constants ===================== */
 const LOGICAL_W = 576;
 const LOGICAL_H = 864;
@@ -335,7 +409,7 @@ function registerCombo(now) {
 }
 
 function showCombo(combo) {
-  comboPopup.textContent = `Комбо x${combo}!`;
+  comboPopup.textContent = t("combo_text", { n: combo });
   comboPopup.classList.remove("show");
   // force reflow so the animation restarts on rapid combos
   void comboPopup.offsetWidth;
@@ -640,6 +714,13 @@ function resetGame() {
   accumulator = 0;
 }
 
+let lastGameWasNewRecord = false;
+
+function renderGameOverTexts() {
+  finalBestEl.textContent = lastGameWasNewRecord ? t("new_record") : t("record_label", { n: best });
+  if (!reviveBtn.disabled) reviveBtn.textContent = t("revive_btn");
+}
+
 async function triggerGameOver() {
   if (state !== "playing") return;
   setState("gameover");
@@ -648,18 +729,16 @@ async function triggerGameOver() {
   shake(20);
 
   finalScoreEl.textContent = String(score);
-  if (score > best) {
+  lastGameWasNewRecord = score > best;
+  if (lastGameWasNewRecord) {
     best = score;
     bestEl.textContent = String(best);
-    finalBestEl.textContent = "Новый рекорд!";
     YSDK.setBestScore(best);
-  } else {
-    finalBestEl.textContent = `Рекорд: ${best}`;
   }
 
   reviveBtn.classList.toggle("hidden", revived || !YSDK.isAvailable());
   reviveBtn.disabled = false;
-  reviveBtn.textContent = "▶ Посмотреть рекламу и продолжить";
+  renderGameOverTexts();
   gameoverScreen.classList.remove("hidden");
 }
 
@@ -691,7 +770,7 @@ restartBtn.addEventListener("click", () => {
 
 reviveBtn.addEventListener("click", async () => {
   reviveBtn.disabled = true;
-  reviveBtn.textContent = "Загрузка…";
+  reviveBtn.textContent = t("revive_loading");
   const rewarded = await YSDK.showRewarded();
   if (rewarded) {
     revived = true;
@@ -702,9 +781,9 @@ reviveBtn.addEventListener("click", async () => {
     accumulator = 0;
     YSDK.gameplayStart();
   } else {
-    reviveBtn.textContent = "Реклама недоступна";
+    reviveBtn.textContent = t("revive_unavailable");
     setTimeout(() => {
-      reviveBtn.textContent = "▶ Посмотреть рекламу и продолжить";
+      reviveBtn.textContent = t("revive_btn");
       reviveBtn.disabled = false;
     }, 1200);
   }
@@ -745,11 +824,14 @@ async function boot() {
   SFX.setMuted(localStorage.getItem("planetMerge.muted") === "1");
   soundBtn.textContent = SFX.isMuted() ? "🔇" : "🔊";
 
+  applyLanguage(YSDK.getLanguage()); // best-effort guess before the SDK finishes loading
+
   resize();
   initQueue();
   requestAnimationFrame(loop);
 
   await YSDK.init();
+  applyLanguage(YSDK.getLanguage()); // authoritative platform language, once available
   best = await YSDK.getBestScore();
   bestEl.textContent = String(best);
   YSDK.gameReady();

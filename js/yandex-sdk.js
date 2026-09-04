@@ -110,6 +110,25 @@ const YSDK = (() => {
     return !!ysdk;
   }
 
+  /**
+   * Player's language per Yandex Games platform requirements (§2.14): the
+   * game must detect locale via the SDK, not hardcode one. Returns an
+   * ISO 639-1 code (e.g. "ru", "en", "tr"). Falls back to the browser
+   * locale when running outside the Yandex Games iframe.
+   */
+  function getLanguage() {
+    try {
+      const lang = ysdk?.environment?.i18n?.lang;
+      if (lang) return lang;
+    } catch (e) {}
+    try {
+      const browserLang = navigator.language || navigator.userLanguage || "en";
+      return browserLang.split("-")[0];
+    } catch (e) {
+      return "en";
+    }
+  }
+
   return {
     init,
     gameReady,
@@ -120,5 +139,6 @@ const YSDK = (() => {
     showInterstitial,
     showRewarded,
     isAvailable,
+    getLanguage,
   };
 })();

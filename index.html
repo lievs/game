@@ -15,26 +15,26 @@
   <!-- Loading screen -->
   <div id="loading-screen" class="screen">
     <div class="planet-spinner"></div>
-    <div class="loading-title">Слияние планет</div>
-    <div class="loading-sub">Загрузка космоса…</div>
+    <div class="loading-title" data-i18n="title">Слияние планет</div>
+    <div class="loading-sub" data-i18n="loading_sub">Загрузка космоса…</div>
   </div>
 
   <!-- Top bar -->
   <header id="topbar">
     <div class="stat">
-      <span class="stat-label">Счёт</span>
+      <span class="stat-label" data-i18n="score_label">Счёт</span>
       <span class="stat-value" id="score">0</span>
     </div>
     <button id="sound-btn" class="icon-btn" aria-label="Звук" title="Звук">🔊</button>
     <div class="stat">
-      <span class="stat-label">Рекорд</span>
+      <span class="stat-label" data-i18n="best_label">Рекорд</span>
       <span class="stat-value" id="best">0</span>
     </div>
   </header>
 
   <!-- Next piece preview -->
   <div id="next-wrap">
-    <span class="next-label">Далее</span>
+    <span class="next-label" data-i18n="next_label">Далее</span>
     <canvas id="next-canvas" width="72" height="72"></canvas>
   </div>
 
@@ -47,31 +47,31 @@
   <!-- Intro / how to play -->
   <div id="intro-screen" class="screen hidden">
     <div class="panel">
-      <h1>Слияние планет</h1>
-      <p>Роняй небесные тела и соединяй одинаковые — они превратятся в объект покрупнее.</p>
-      <p>Дойди до Чёрной дыры и не дай башне переполниться!</p>
+      <h1 data-i18n="title">Слияние планет</h1>
+      <p data-i18n="intro_p1">Роняй небесные тела и соединяй одинаковые — они превратятся в объект покрупнее.</p>
+      <p data-i18n="intro_p2">Дойди до Чёрной дыры и не дай башне переполниться!</p>
       <div class="intro-chain">☄️ → 🌑 → 🪐 → 🌍 → ☀️ → 🕳️</div>
-      <button id="start-btn" class="primary-btn">Играть</button>
+      <button id="start-btn" class="primary-btn" data-i18n="play_btn">Играть</button>
     </div>
   </div>
 
   <!-- Game over -->
   <div id="gameover-screen" class="screen hidden">
     <div class="panel">
-      <h1>Коллапс!</h1>
-      <p>Ваш счёт</p>
+      <h1 data-i18n="gameover_title">Коллапс!</h1>
+      <p data-i18n="gameover_your_score">Ваш счёт</p>
       <div class="final-score" id="final-score">0</div>
       <div class="final-best" id="final-best"></div>
-      <button id="revive-btn" class="secondary-btn hidden">▶ Посмотреть рекламу и продолжить</button>
-      <button id="restart-btn" class="primary-btn">Ещё раз</button>
+      <button id="revive-btn" class="secondary-btn hidden" data-i18n="revive_btn">▶ Посмотреть рекламу и продолжить</button>
+      <button id="restart-btn" class="primary-btn" data-i18n="restart_btn">Ещё раз</button>
     </div>
   </div>
 
   <!-- Pause overlay (shown on blur) -->
   <div id="pause-screen" class="screen hidden">
     <div class="panel">
-      <h1>Пауза</h1>
-      <button id="resume-btn" class="primary-btn">Продолжить</button>
+      <h1 data-i18n="pause_title">Пауза</h1>
+      <button id="resume-btn" class="primary-btn" data-i18n="resume_btn">Продолжить</button>
     </div>
   </div>
 
