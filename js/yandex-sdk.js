@@ -110,6 +110,20 @@ const YSDK = (() => {
     return !!ysdk;
   }
 
+  /**
+   * Interface language reported by the platform (ISO 639-1, e.g. "ru",
+   * "en", "tr"), per Yandex Games requirement 2.14 on automatic language
+   * detection. Returns null when the SDK isn't present, so the caller can
+   * fall back to navigator.language for standalone/off-platform runs.
+   */
+  function getLang() {
+    try {
+      return ysdk?.environment?.i18n?.lang || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   return {
     init,
     gameReady,
@@ -120,5 +134,6 @@ const YSDK = (() => {
     showInterstitial,
     showRewarded,
     isAvailable,
+    getLang,
   };
 })();
