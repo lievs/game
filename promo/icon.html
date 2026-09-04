@@ -1,0 +1,119 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+  html, body { margin: 0; padding: 0; background: #0b0e2a; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="512" height="512"></canvas>
+<script>
+  const c = document.getElementById("c");
+  const ctx = c.getContext("2d");
+  const W = 512, H = 512;
+
+  function drawPlanet(cx, cy, r, c1, c2, glow) {
+    if (glow) {
+      ctx.save();
+      ctx.shadowColor = c1;
+      ctx.shadowBlur = r * 1.1;
+    }
+    const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.35, r * 0.15, cx, cy, r);
+    g.addColorStop(0, c1);
+    g.addColorStop(1, c2);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+    if (glow) ctx.restore();
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.32, cy - r * 0.32, r * 0.28, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.28)";
+    ctx.fill();
+  }
+
+  function drawRing(cx, cy, r) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-0.35);
+    ctx.scale(1, 0.32);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.55, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(230,215,170,0.9)";
+    ctx.lineWidth = Math.max(3, r * 0.16);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // background
+  const bg = ctx.createRadialGradient(W * 0.5, H * 0.42, 20, W * 0.5, H * 0.5, W * 0.75);
+  bg.addColorStop(0, "#1a1040");
+  bg.addColorStop(1, "#05061a");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // stars
+  const rng = (seed => () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)(7);
+  for (let i = 0; i < 60; i++) {
+    const x = rng() * W, y = rng() * H, r = rng() * 1.6 + 0.3;
+    ctx.globalAlpha = rng() * 0.6 + 0.3;
+    ctx.fillStyle = "#cfe0ff";
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // small black hole glow, bottom-left corner, partially off-canvas for depth
+  ctx.save();
+  ctx.shadowColor = "#8a6fe0";
+  ctx.shadowBlur = 46;
+  const bh = ctx.createRadialGradient(96, 430, 4, 96, 430, 70);
+  bh.addColorStop(0, "#2a1a4a");
+  bh.addColorStop(0.55, "#150a28");
+  bh.addColorStop(1, "rgba(5,1,8,0)");
+  ctx.beginPath();
+  ctx.arc(96, 430, 70, 0, Math.PI * 2);
+  ctx.fillStyle = bh;
+  ctx.fill();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(96, 430, 30, 0, Math.PI * 2);
+  ctx.fillStyle = "#050108";
+  ctx.fill();
+
+  // main planet (Saturn-like, big + ring) center-right
+  drawRing(330, 270, 128);
+  drawPlanet(330, 270, 128, "#f2df9a", "#b89a4e", false);
+
+  // small moon top-left, "about to merge" with a sparkle trail
+  ctx.save();
+  ctx.globalAlpha = 0.55;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([4, 10]);
+  ctx.beginPath();
+  ctx.moveTo(150, 90);
+  ctx.lineTo(255, 175);
+  ctx.stroke();
+  ctx.restore();
+  drawPlanet(130, 78, 46, "#f2f2f2", "#9a9a9a", false);
+
+  // sparkle burst near contact point
+  function sparkle(x, y, r, a) {
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = "#fff6b0";
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  sparkle(238, 168, 10, 0.9);
+  sparkle(222, 150, 5, 0.7);
+  sparkle(252, 182, 4, 0.6);
+</script>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+  html, body { margin: 0; padding: 0; background: #0b0e2a; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="470"></canvas>
+<script>
+  const c = document.getElementById("c");
+  const ctx = c.getContext("2d");
+  const W = 800, H = 470;
+
+  function drawPlanet(cx, cy, r, c1, c2, glow) {
+    if (glow) {
+      ctx.save();
+      ctx.shadowColor = c1;
+      ctx.shadowBlur = r * 1.3;
+    }
+    const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.35, r * 0.15, cx, cy, r);
+    g.addColorStop(0, c1);
+    g.addColorStop(1, c2);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+    if (glow) ctx.restore();
+    ctx.beginPath();
+    ctx.arc(cx - r * 0.3, cy - r * 0.3, r * 0.26, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.fill();
+  }
+
+  function drawRing(cx, cy, r) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-0.35);
+    ctx.scale(1, 0.32);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.55, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(230,215,170,0.85)";
+    ctx.lineWidth = Math.max(2, r * 0.14);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // background
+  const bg = ctx.createRadialGradient(W * 0.5, H * 0.35, 20, W * 0.5, H * 0.5, W * 0.8);
+  bg.addColorStop(0, "#1a1040");
+  bg.addColorStop(1, "#05061a");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  const rng = (seed => () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff)(42);
+  for (let i = 0; i < 110; i++) {
+    const x = rng() * W, y = rng() * H, r = rng() * 1.6 + 0.3;
+    ctx.globalAlpha = rng() * 0.6 + 0.3;
+    ctx.fillStyle = "#cfe0ff";
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // chain of growing planets left -> right, ending in a glowing black hole
+  const chain = [
+    { x: 70,  y: 360, r: 16, c1: "#c9c9c9", c2: "#5a5a5a" },
+    { x: 130, y: 340, r: 22, c1: "#f2f2f2", c2: "#9a9a9a" },
+    { x: 205, y: 355, r: 30, c1: "#f0906a", c2: "#a34328" },
+    { x: 300, y: 330, r: 40, c1: "#6fb6ef", c2: "#265d99" },
+    { x: 415, y: 345, r: 52, c1: "#f2df9a", c2: "#b89a4e", ring: true },
+    { x: 555, y: 315, r: 64, c1: "#fff6b0", c2: "#ffb347", glow: true },
+  ];
+  for (const p of chain) {
+    if (p.ring) drawRing(p.x, p.y, p.r);
+    drawPlanet(p.x, p.y, p.r, p.c1, p.c2, p.glow);
+  }
+
+  // black hole finale, bottom-right
+  const bhx = 705, bhy = 300;
+  ctx.save();
+  ctx.shadowColor = "#8a6fe0";
+  ctx.shadowBlur = 60;
+  const bh = ctx.createRadialGradient(bhx, bhy, 6, bhx, bhy, 92);
+  bh.addColorStop(0, "#3a2a5c");
+  bh.addColorStop(0.5, "#150a28");
+  bh.addColorStop(1, "rgba(5,1,8,0)");
+  ctx.beginPath();
+  ctx.arc(bhx, bhy, 92, 0, Math.PI * 2);
+  ctx.fillStyle = bh;
+  ctx.fill();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(bhx, bhy, 40, 0, Math.PI * 2);
+  ctx.fillStyle = "#050108";
+  ctx.fill();
+
+  // title
+  ctx.textBaseline = "alphabetic";
+  ctx.font = "800 58px -apple-system, Arial, sans-serif";
+  const grad = ctx.createLinearGradient(40, 0, 520, 0);
+  grad.addColorStop(0, "#4f9be0");
+  grad.addColorStop(1, "#ffb347");
+  ctx.fillStyle = grad;
+  ctx.fillText("Слияние планет", 40, 100);
+
+  ctx.font = "500 22px -apple-system, Arial, sans-serif";
+  ctx.fillStyle = "rgba(242,242,255,0.85)";
+  ctx.fillText("от астероида до чёрной дыры", 42, 138);
+</script>
+</body>
+</html>
