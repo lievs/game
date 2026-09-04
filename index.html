@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Слияние планет</title>
+<meta name="description" content="Сливай планеты от астероида до чёрной дыры! Затягивающая физическая головоломка." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%232a6bb0'/%3E%3Ccircle cx='22' cy='24' r='9' fill='%234f9be0'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Loading screen -->
+  <div id="loading-screen" class="screen">
+    <div class="planet-spinner"></div>
+    <div class="loading-title">Слияние планет</div>
+    <div class="loading-sub">Загрузка космоса…</div>
+  </div>
+
+  <!-- Top bar -->
+  <header id="topbar">
+    <div class="stat">
+      <span class="stat-label">Счёт</span>
+      <span class="stat-value" id="score">0</span>
+    </div>
+    <button id="sound-btn" class="icon-btn" aria-label="Звук" title="Звук">🔊</button>
+    <div class="stat">
+      <span class="stat-label">Рекорд</span>
+      <span class="stat-value" id="best">0</span>
+    </div>
+  </header>
+
+  <!-- Next piece preview -->
+  <div id="next-wrap">
+    <span class="next-label">Далее</span>
+    <canvas id="next-canvas" width="72" height="72"></canvas>
+  </div>
+
+  <!-- Game canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Combo popup -->
+  <div id="combo-popup"></div>
+
+  <!-- Intro / how to play -->
+  <div id="intro-screen" class="screen hidden">
+    <div class="panel">
+      <h1>Слияние планет</h1>
+      <p>Роняй небесные тела и соединяй одинаковые — они превратятся в объект покрупнее.</p>
+      <p>Дойди до Чёрной дыры и не дай башне переполниться!</p>
+      <div class="intro-chain">☄️ → 🌑 → 🪐 → 🌍 → ☀️ → 🕳️</div>
+      <button id="start-btn" class="primary-btn">Играть</button>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div id="gameover-screen" class="screen hidden">
+    <div class="panel">
+      <h1>Коллапс!</h1>
+      <p>Ваш счёт</p>
+      <div class="final-score" id="final-score">0</div>
+      <div class="final-best" id="final-best"></div>
+      <button id="revive-btn" class="secondary-btn hidden">▶ Посмотреть рекламу и продолжить</button>
+      <button id="restart-btn" class="primary-btn">Ещё раз</button>
+    </div>
+  </div>
+
+  <!-- Pause overlay (shown on blur) -->
+  <div id="pause-screen" class="screen hidden">
+    <div class="panel">
+      <h1>Пауза</h1>
+      <button id="resume-btn" class="primary-btn">Продолжить</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://yandex.ru/games/sdk/v2"></script>
+<script src="js/yandex-sdk.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
