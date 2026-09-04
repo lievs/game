@@ -57,6 +57,13 @@ event when two black holes collide.
 - **Synthesized audio** (Web Audio oscillators/noise, no asset files) for
   drop/merge/combo/game-over/big-bang sounds, with a mute toggle
   persisted to `localStorage`.
+- **Automatic language detection** (`js/i18n.js`), per Yandex Games
+  requirement 2.14: the interface language is read from
+  `ysdk.environment.i18n.lang` (with `navigator.language` as the
+  before-SDK-responds/standalone fallback) and never asked of the player.
+  Yandex's own documented minimum viable localization set is served: the
+  RU-family locales the platform reports (`ru`, `be`, `kk`, `uk`, `uz`)
+  get the Russian strings, everything else falls back to English.
 - **Real Yandex Games SDK integration** (`js/yandex-sdk.js`), wired to:
   - `LoadingAPI.ready()` once the game is interactive;
   - `GameplayAPI.start()/stop()` around active play (including on
@@ -79,6 +86,7 @@ event when two black holes collide.
 index.html          entry point, loads the Yandex SDK script + the game
 style.css            all styling (dark space theme, responsive, mobile-first)
 js/yandex-sdk.js      thin wrapper around window.YaGames with safe fallbacks
+js/i18n.js             SDK-driven language detection + ru/en UI strings
 js/audio.js           synthesized WebAudio sound effects (no asset files)
 js/game.js             physics engine, rendering, input, game state machine
 ```

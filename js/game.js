@@ -335,7 +335,7 @@ function registerCombo(now) {
 }
 
 function showCombo(combo) {
-  comboPopup.textContent = `Комбо x${combo}!`;
+  comboPopup.textContent = I18N.t("combo_x", { n: combo });
   comboPopup.classList.remove("show");
   // force reflow so the animation restarts on rapid combos
   void comboPopup.offsetWidth;
@@ -651,15 +651,15 @@ async function triggerGameOver() {
   if (score > best) {
     best = score;
     bestEl.textContent = String(best);
-    finalBestEl.textContent = "Новый рекорд!";
+    finalBestEl.textContent = I18N.t("new_record");
     YSDK.setBestScore(best);
   } else {
-    finalBestEl.textContent = `Рекорд: ${best}`;
+    finalBestEl.textContent = I18N.t("record_x", { n: best });
   }
 
   reviveBtn.classList.toggle("hidden", revived || !YSDK.isAvailable());
   reviveBtn.disabled = false;
-  reviveBtn.textContent = "▶ Посмотреть рекламу и продолжить";
+  reviveBtn.textContent = I18N.t("revive_btn");
   gameoverScreen.classList.remove("hidden");
 }
 
@@ -691,7 +691,7 @@ restartBtn.addEventListener("click", () => {
 
 reviveBtn.addEventListener("click", async () => {
   reviveBtn.disabled = true;
-  reviveBtn.textContent = "Загрузка…";
+  reviveBtn.textContent = I18N.t("revive_loading");
   const rewarded = await YSDK.showRewarded();
   if (rewarded) {
     revived = true;
@@ -702,9 +702,9 @@ reviveBtn.addEventListener("click", async () => {
     accumulator = 0;
     YSDK.gameplayStart();
   } else {
-    reviveBtn.textContent = "Реклама недоступна";
+    reviveBtn.textContent = I18N.t("revive_unavailable");
     setTimeout(() => {
-      reviveBtn.textContent = "▶ Посмотреть рекламу и продолжить";
+      reviveBtn.textContent = I18N.t("revive_btn");
       reviveBtn.disabled = false;
     }, 1200);
   }
@@ -741,7 +741,16 @@ window.addEventListener("blur", () => {
 });
 
 /* ===================== Boot ===================== */
+function localize(lang) {
+  I18N.setLang(lang);
+  I18N.applyToDOM();
+}
+
 async function boot() {
+  // Best-effort localization before the SDK responds, so the loading
+  // screen isn't stuck in Russian while YSDK.init() is in flight.
+  localize(navigator.language);
+
   SFX.setMuted(localStorage.getItem("planetMerge.muted") === "1");
   soundBtn.textContent = SFX.isMuted() ? "🔇" : "🔊";
 
@@ -750,6 +759,10 @@ async function boot() {
   requestAnimationFrame(loop);
 
   await YSDK.init();
+  // Per platform requirement 2.14: the SDK's reported interface language
+  // is authoritative once available (overrides the navigator.language guess).
+  localize(YSDK.getLang() || navigator.language);
+
   best = await YSDK.getBestScore();
   bestEl.textContent = String(best);
   YSDK.gameReady();
