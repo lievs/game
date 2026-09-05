@@ -1,1 +1,27 @@
-<!doctype html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#081018"><title>Последний курьер</title><script async src="/sdk.js"></script><style>#lc-mobile{display:none;position:fixed;inset:0;z-index:9999;pointer-events:none}.lc-pad{position:absolute;left:16px;bottom:18px;display:grid;grid-template-columns:50px 50px 50px;grid-template-rows:50px 50px 50px;gap:6px;pointer-events:auto}.lc-pad button,.lc-actions button{border:1px solid rgba(120,220,255,.35);background:rgba(7,20,29,.75);color:#dff8ff;border-radius:14px;font-size:20px;backdrop-filter:blur(7px);touch-action:none}.lc-pad .up{grid-column:2}.lc-pad .left{grid-column:1;grid-row:2}.lc-pad .down{grid-column:2;grid-row:3}.lc-pad .right{grid-column:3;grid-row:2}.lc-actions{position:absolute;right:16px;bottom:18px;display:flex;gap:7px;pointer-events:auto}.lc-actions button{width:58px;height:58px;font-size:10px}@media(pointer:coarse),(max-width:850px){#lc-mobile{display:block}}</style></head><body><div id="game"></div><div id="lc-mobile"><div class="lc-pad"><button class="up">▲</button><button class="left">◀</button><button class="down">▼</button><button class="right">▶</button></div><div class="lc-actions"><button data-key="SHIFT">BOOST</button><button data-key="E">ЗАКАЗ</button><button data-key="M">КАРТА</button></div></div><script type="module" src="/src/main.ts"></script><script>const p=(k,d)=>window.dispatchEvent(new KeyboardEvent(d?'keydown':'keyup',{key:k,code:k,bubbles:true}));const b=(e,k)=>{['pointerdown','touchstart'].forEach(x=>e.addEventListener(x,v=>{v.preventDefault();p(k,true)},{passive:false}));['pointerup','pointercancel','pointerleave','touchend'].forEach(x=>e.addEventListener(x,v=>{v.preventDefault();p(k,false)},{passive:false}))};[['.up','ArrowUp'],['.left','ArrowLeft'],['.down','ArrowDown'],['.right','ArrowRight'],['[data-key="SHIFT"]','SHIFT'],['[data-key="E"]','E'],['[data-key="M"]','M']].forEach(([s,k])=>b(document.querySelector(s),k));window.addEventListener('blur',()=>['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','SHIFT','E'].forEach(k=>p(k,false)));</script></body></html>
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#061017">
+<meta name="description" content="Последний курьер — ночной экшен о доставках в живом городе Новоград.">
+<title>Последний курьер</title>
+<script async src="/sdk.js"></script>
+</head>
+<body>
+<div id="game"></div>
+<div id="lc-mobile" aria-hidden="true">
+  <div class="lc-pad">
+    <button class="up">▲</button><button class="left">◀</button><button class="down">▼</button><button class="right">▶</button>
+  </div>
+  <div class="lc-actions"><button data-key="SHIFT">BOOST</button><button data-key="E">E</button><button data-key="M">MAP</button></div>
+</div>
+<script type="module" src="/src/main.ts"></script>
+<script>
+const send=(key,down)=>window.dispatchEvent(new KeyboardEvent(down?'keydown':'keyup',{key,code:key,bubbles:true}));
+const bind=(el,key)=>{if(!el)return;['pointerdown','touchstart'].forEach(e=>el.addEventListener(e,v=>{v.preventDefault();send(key,true)},{passive:false}));['pointerup','pointercancel','pointerleave','touchend'].forEach(e=>el.addEventListener(e,v=>{v.preventDefault();send(key,false)},{passive:false}))};
+[['.up','ArrowUp'],['.left','ArrowLeft'],['.down','ArrowDown'],['.right','ArrowRight'],['[data-key="SHIFT"]','SHIFT'],['[data-key="E"]','E'],['[data-key="M"]','M']].forEach(x=>bind(document.querySelector(x[0]),x[1]));
+window.addEventListener('blur',()=>['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','SHIFT'].forEach(k=>send(k,false)));
+</script>
+</body>
+</html>
