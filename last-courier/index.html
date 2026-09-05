@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#061017">
+<meta name="description" content="Последний курьер — ночной экшен о доставках в живом городе Новоград.">
+<title>Последний курьер</title>
+<script async src="/sdk.js"></script>
+</head>
+<body>
+<div id="game"></div>
+<div id="lc-mobile" aria-hidden="true">
+  <div class="lc-pad">
+    <button class="up">▲</button><button class="left">◀</button><button class="down">▼</button><button class="right">▶</button>
+  </div>
+  <div class="lc-actions"><button data-key="SHIFT">BOOST</button><button data-key="E">E</button><button data-key="M">MAP</button></div>
+</div>
+<script type="module" src="/src/main.ts"></script>
+<script>
+const send=(key,down)=>window.dispatchEvent(new KeyboardEvent(down?'keydown':'keyup',{key,code:key,bubbles:true}));
+const bind=(el,key)=>{if(!el)return;['pointerdown','touchstart'].forEach(e=>el.addEventListener(e,v=>{v.preventDefault();send(key,true)},{passive:false}));['pointerup','pointercancel','pointerleave','touchend'].forEach(e=>el.addEventListener(e,v=>{v.preventDefault();send(key,false)},{passive:false}))};
+[['.up','ArrowUp'],['.left','ArrowLeft'],['.down','ArrowDown'],['.right','ArrowRight'],['[data-key="SHIFT"]','SHIFT'],['[data-key="E"]','E'],['[data-key="M"]','M']].forEach(x=>bind(document.querySelector(x[0]),x[1]));
+window.addEventListener('blur',()=>['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','SHIFT'].forEach(k=>send(k,false)));
+</script>
+</body>
+</html>

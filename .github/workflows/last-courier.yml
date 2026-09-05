@@ -1,0 +1,37 @@
+name: Last Courier build
+
+on:
+  push:
+    branches: [feature/last-courier-core]
+    paths:
+      - 'last-courier/**'
+      - '.github/workflows/last-courier.yml'
+  pull_request:
+    paths:
+      - 'last-courier/**'
+      - '.github/workflows/last-courier.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: last-courier
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: last-courier/package.json
+      - run: npm install
+      - run: npm run build
+      - name: Package production build
+        run: tar -czf last-courier-production.tar.gz -C dist .
+      - name: Upload production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-courier-production
+          path: last-courier/last-courier-production.tar.gz
+          if-no-files-found: error
+          retention-days: 14
