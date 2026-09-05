@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Хранитель Бездны</title>
+<meta name="description" content="Сливай духов Бездны, побеждай стражей этажей и спускайся всё глубже — merge-roguelite с постоянной прогрессией." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23150b28'/%3E%3Ccircle cx='32' cy='32' r='14' fill='%23caa227'/%3E%3Ccircle cx='32' cy='32' r='6' fill='%23150b28'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Loading screen -->
+  <div id="loading-screen" class="screen">
+    <div class="abyss-spinner"></div>
+    <div class="loading-title" data-i18n="title">Хранитель Бездны</div>
+    <div class="loading-sub" data-i18n="loading_sub">Спуск начинается…</div>
+  </div>
+
+  <!-- ============ HUB (Лагерь Хранителя) ============ -->
+  <div id="hub-screen" class="screen hidden">
+    <div class="panel hub-panel">
+      <h1 data-i18n="hub_title">Лагерь Хранителя</h1>
+      <div class="hub-stats">
+        <div class="hub-stat">
+          <span class="stat-label" data-i18n="shards_label">Осколки памяти</span>
+          <span class="stat-value" id="hub-shards">0</span>
+        </div>
+        <div class="hub-stat">
+          <span class="stat-label" data-i18n="best_floor_label">Лучший этаж</span>
+          <span class="stat-value" id="hub-best-floor">0</span>
+        </div>
+      </div>
+
+      <div id="upgrade-list" class="upgrade-list"><!-- filled by JS --></div>
+
+      <button id="descend-btn" class="primary-btn" data-i18n="descend_btn">Спуститься в Бездну</button>
+      <div class="hub-links">
+        <button id="howto-btn" class="link-btn" data-i18n="howto_btn">Как играть</button>
+        <button id="journal-btn" class="link-btn" data-i18n="journal_btn">Дневник Хранителя</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Journal (lore fragments) ============ -->
+  <div id="journal-screen" class="screen hidden">
+    <div class="panel">
+      <h1 data-i18n="journal_title">Дневник Хранителя</h1>
+      <div id="journal-list" class="journal-list"><!-- filled by JS --></div>
+      <button id="journal-close-btn" class="primary-btn" data-i18n="close_btn">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- ============ Intro / how to play ============ -->
+  <div id="intro-screen" class="screen hidden">
+    <div class="panel">
+      <h1 data-i18n="title">Хранитель Бездны</h1>
+      <p data-i18n="intro_p1">Роняй духов Бездны и соединяй одинаковых — они сольются в более сильную форму.</p>
+      <p data-i18n="intro_p2">Осевшие духи сами атакуют стража этажа. Побеждай его — и спускайся глубже.</p>
+      <p data-i18n="intro_p3">Не дай колодцу переполниться — иначе Бездна вытеснит тебя наверх (но всё заработанное останется).</p>
+      <div class="intro-chain">✨ → 👻 → 🌑 → 🛡️ → 🐉 → 🗿 → 🌲 → 👑 → 💎 → 🌟</div>
+      <button id="start-btn" class="primary-btn" data-i18n="play_btn">Начать спуск</button>
+      <button id="intro-back-btn" class="link-btn" data-i18n="back_btn">Назад в лагерь</button>
+    </div>
+  </div>
+
+  <!-- Top bar (during a run) -->
+  <header id="topbar" class="hidden">
+    <button id="retreat-btn" class="icon-btn" aria-label="Отступить" title="Отступить">🏳️</button>
+    <div class="stat">
+      <span class="stat-label" data-i18n="floor_label">Этаж</span>
+      <span class="stat-value" id="floor-num">1</span>
+    </div>
+    <button id="sound-btn" class="icon-btn" aria-label="Звук" title="Звук">🔊</button>
+  </header>
+
+  <!-- Enemy banner (during a run) -->
+  <div id="enemy-wrap" class="hidden">
+    <span id="enemy-name">—</span>
+    <div class="enemy-hp-track"><div id="enemy-hp-fill" class="enemy-hp-fill"></div></div>
+  </div>
+
+  <!-- Next piece preview -->
+  <div id="next-wrap" class="hidden">
+    <span class="next-label" data-i18n="next_label">Далее</span>
+    <canvas id="next-canvas" width="72" height="72"></canvas>
+  </div>
+
+  <!-- Game canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Popups -->
+  <div id="combo-popup"></div>
+  <div id="floor-toast"></div>
+
+  <!-- ============ Fragment unlock modal ============ -->
+  <div id="fragment-screen" class="screen hidden">
+    <div class="panel">
+      <h1 data-i18n="fragment_title">Фрагмент памяти</h1>
+      <p id="fragment-text"></p>
+      <button id="fragment-close-btn" class="primary-btn" data-i18n="continue_btn">Продолжить</button>
+    </div>
+  </div>
+
+  <!-- ============ Run end (overflow / retreat) ============ -->
+  <div id="runend-screen" class="screen hidden">
+    <div class="panel">
+      <h1 id="runend-title" data-i18n="overflow_title">Бездна вытесняет тебя!</h1>
+      <p data-i18n="runend_floor_label">Ты дошёл до этажа</p>
+      <div class="final-score" id="runend-floor">1</div>
+      <p><span data-i18n="runend_shards_label">Осколков получено:</span> <span id="runend-shards">0</span></p>
+      <div class="final-best" id="runend-best"></div>
+      <button id="revive-btn" class="secondary-btn hidden" data-i18n="revive_btn">▶ Посмотреть рекламу и продолжить</button>
+      <button id="tohub-btn" class="primary-btn" data-i18n="tohub_btn">В лагерь</button>
+    </div>
+  </div>
+
+  <!-- Pause overlay (shown on blur) -->
+  <div id="pause-screen" class="screen hidden">
+    <div class="panel">
+      <h1 data-i18n="pause_title">Пауза</h1>
+      <button id="resume-btn" class="primary-btn" data-i18n="resume_btn">Продолжить</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://yandex.ru/games/sdk/v2"></script>
+<script src="js/yandex-sdk.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

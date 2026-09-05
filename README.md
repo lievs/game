@@ -4,6 +4,13 @@ A drop-and-merge physics puzzle built for **Yandex Games**: drop small
 celestial bodies into a well, merge two matching ones into the next tier,
 and try to reach the final tier — a black hole — before the well overflows.
 
+> This repo also contains a second, self-contained title:
+> [`keeper-of-the-abyss/`](keeper-of-the-abyss/) — **Хранитель Бездны
+> (Keeper of the Abyss)**, a merge + roguelite-descent game with a
+> persistent meta-progression hub and unlockable narrative, built to
+> chase the platform's midcore/hybrid-monetization trend. See its own
+> [README](keeper-of-the-abyss/README.md) and [GDD](keeper-of-the-abyss/GDD.md).
+
 ## Why this game / genre
 
 Before writing any code, I looked at what actually performs well on Yandex
