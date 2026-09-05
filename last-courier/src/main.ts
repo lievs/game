@@ -1,169 +1,93 @@
 import Phaser from 'phaser';
 import './style.css';
+import {detectLang,getLang,setLang,LANGS,t} from './i18n';
 
-type VehicleId = 'bike' | 'scooter' | 'moto' | 'car' | 'van';
-type Weather = 'clear' | 'rain' | 'fog' | 'storm';
-type MissionKind = 'standard' | 'timed' | 'fragile' | 'multi' | 'highrisk';
+type VehicleId='bike'|'scooter'|'moto'|'car'|'van';
+type Weather='clear'|'rain'|'fog'|'storm';
+type Kind='standard'|'timed'|'fragile'|'multi'|'highrisk';
+type Save={money:number;rep:number;day:number;deliveries:number;streak:number;best:number;vehicle:VehicleId;upgrades:Record<string,number>;unlocked:VehicleId[];story:number;achievements:string[];adBoost:number;lang:string};
+const KEY='last-courier-save-v5';
+const DEFAULT:Save={money:350,rep:0,day:1,deliveries:0,streak:0,best:0,vehicle:'bike',upgrades:{engine:0,brakes:0,battery:0,bag:0,nav:0},unlocked:['bike'],story:0,achievements:[],adBoost:0,lang:'ru'};
+const clone=():Save=>JSON.parse(JSON.stringify(DEFAULT));
+function load():Save{try{const x=JSON.parse(localStorage.getItem(KEY)||'null');return x?{...clone(),...x,upgrades:{...DEFAULT.upgrades,...x.upgrades}}:clone()}catch{return clone()}}
+let save=load();
 
-type Save = {
-  money:number; rep:number; day:number; deliveries:number; streak:number; best:number;
-  vehicle:VehicleId; upgrades:{engine:number;brakes:number;battery:number;bag:number;nav:number};
-  unlocked:VehicleId[]; story:number; faction:number; achievements:string[];
-};
-
-const KEY='last-courier-save-v3';
-const DEFAULT:Save={money:350,rep:0,day:1,deliveries:0,streak:0,best:0,vehicle:'bike',
-  upgrades:{engine:0,brakes:0,battery:0,bag:0,nav:0},unlocked:['bike'],story:0,faction:0,achievements:[]};
-const cloneDefault=():Save=>JSON.parse(JSON.stringify(DEFAULT));
-const loadSave=():Save=>{try{
-  const raw=JSON.parse(localStorage.getItem(KEY)||'null'); if(!raw)return cloneDefault();
-  return {...cloneDefault(),...raw,upgrades:{...DEFAULT.upgrades,...(raw.upgrades||{})},unlocked:raw.unlocked||['bike'],achievements:raw.achievements||[]};
-}catch{return cloneDefault()}};
-const persist=(s:Save)=>localStorage.setItem(KEY,JSON.stringify(s));
-
-class SDKBridge{
-  ysdk:any; player:any;
-  async init(){try{const Y=(window as any).YaGames;if(!Y)return;this.ysdk=await Y.init();this.ysdk?.features?.LoadingAPI?.ready?.();this.player=await this.ysdk?.getPlayer?.({scopes:false});const d=await this.player?.getData?.();if(d?.money!==undefined){Object.assign(gameSave,d);}}catch{}}
-  async cloud(s:Save){persist(s);try{await this.player?.setData?.(s,true)}catch{}}
-  fullscreen(){try{this.ysdk?.adv?.showFullscreenAdv?.({callbacks:{}})}catch{}}
-  rewarded(cb:()=>void){try{this.ysdk?.adv?.showRewardedVideo?.({callbacks:{onRewarded:cb,onClose:()=>{}}})}catch{cb()}}
+class Platform{
+ ysdk:any;player:any;ready=false;
+ async init(){try{const Y=(window as any).YaGames;if(!Y)return;this.ysdk=await Y.init();this.ready=true;const detected=detectLang(this.ysdk);if(!save.lang||save.lang==='auto'){save.lang=detected}setLang(save.lang);this.ysdk?.features?.LoadingAPI?.ready?.();this.player=await this.ysdk.getPlayer?.({scopes:false});const cloud=await this.player?.getData?.();if(cloud?.money!==undefined){save={...clone(),...cloud,upgrades:{...DEFAULT.upgrades,...(cloud.upgrades||{})}};setLang(save.lang||detected);persist(save)}}catch{setLang(save.lang||'ru')}}
+ async cloud(){persist(save);try{await this.player?.setData?.(save,true)}catch{}}
+ persist(){persist(save);void this.cloud()}
+ adFull(){try{this.ysdk?.adv?.showFullscreenAdv?.({callbacks:{onOpen:()=>window.dispatchEvent(new Event('lc-ad-open')),onClose:()=>window.dispatchEvent(new Event('lc-ad-close')),onError:()=>window.dispatchEvent(new Event('lc-ad-close'))}})}catch{}}
+ reward(onReward:()=>void){try{this.ysdk?.adv?.showRewardedVideo?.({callbacks:{onOpen:()=>window.dispatchEvent(new Event('lc-ad-open')),onRewarded:onReward,onClose:()=>window.dispatchEvent(new Event('lc-ad-close')),onError:()=>window.dispatchEvent(new Event('lc-ad-close'))}})}catch{}}
+ score(){try{if(this.ysdk?.leaderboards?.setScore)this.ysdk.leaderboards.setScore('last_courier_deliveries',save.deliveries)}catch{}}
 }
-const sdk=new SDKBridge();
-let gameSave=loadSave();
-
-const VEHICLES:{id:VehicleId;name:string;price:number;speed:number;handling:number;capacity:number;desc:string}[]=[
- {id:'bike',name:'Велосипед',price:0,speed:155,handling:1.18,capacity:1,desc:'Дёшево, манёвренность максимальная'},
- {id:'scooter',name:'Скутер',price:900,speed:205,handling:1.06,capacity:2,desc:'Баланс скорости и груза'},
- {id:'moto',name:'Мотоцикл',price:2400,speed:260,handling:.96,capacity:2,desc:'Быстрый транспорт для срочных заказов'},
- {id:'car',name:'Городской автомобиль',price:6200,speed:235,handling:.76,capacity:4,desc:'Стабильность в плохую погоду'},
- {id:'van',name:'Фургон',price:11500,speed:190,handling:.58,capacity:7,desc:'Много груза и самые дорогие контракты'}
-];
-const UPGRADE:{key:keyof Save['upgrades'];name:string;base:number;max:number;desc:string}[]=[
- {key:'engine',name:'Двигатель',base:450,max:5,desc:'+ скорость'},
- {key:'brakes',name:'Тормоза',base:380,max:5,desc:'+ контроль'},
- {key:'battery',name:'Батарея',base:420,max:5,desc:'+ запас энергии'},
- {key:'bag',name:'Сумка',base:500,max:5,desc:'+ грузоподъёмность'},
- {key:'nav',name:'Навигация',base:600,max:5,desc:'+ время на заказ'}
-];
-const DISTRICTS=[
- {name:'ЦЕНТР',x:900,y:470,color:0x243d55,risk:1.25,pay:1.3},
- {name:'СТАРЫЙ ГОРОД',x:380,y:330,color:0x4a3848,risk:1.15,pay:1.15},
- {name:'ПРОМЗОНА',x:1390,y:830,color:0x443c31,risk:1.55,pay:1.5},
- {name:'ЖИЛОЙ РАЙОН',x:380,y:820,color:0x29453b,risk:.8,pay:1},
- {name:'ПОРТ',x:1540,y:270,color:0x29434a,risk:1.7,pay:1.7},
- {name:'ПРИГОРОД',x:920,y:1040,color:0x34432f,risk:.65,pay:1.35}
-];
-
-function vehicle(){return VEHICLES.find(v=>v.id===gameSave.vehicle)!}
-function upgradeCost(k:keyof Save['upgrades']){const u=UPGRADE.find(x=>x.key===k)!;return Math.round(u.base*Math.pow(1.62,gameSave.upgrades[k]))}
+const platform=new Platform();
+function persist(s=save){localStorage.setItem(KEY,JSON.stringify(s))}
 function clamp(n:number,a:number,b:number){return Math.max(a,Math.min(b,n))}
+function dist(a:{x:number;y:number},b:{x:number;y:number}){return Math.hypot(a.x-b.x,a.y-b.y)}
 
-class Boot extends Phaser.Scene{
- constructor(){super('Boot')}
- create(){
-  this.cameras.main.setBackgroundColor('#071018');
-  this.add.text(this.scale.width/2,this.scale.height/2-45,'ПОСЛЕДНИЙ КУРЬЕР',{fontFamily:'Arial Black,Arial',fontSize:'42px',color:'#eaf6ff'}).setOrigin(.5);
-  this.add.text(this.scale.width/2,this.scale.height/2+10,'НОВОГРАД • НОЧНАЯ СМЕНА',{fontSize:'15px',color:'#6d8ba0',letterSpacing:4}).setOrigin(.5);
-  this.add.text(this.scale.width/2,this.scale.height/2+65,'Загрузка города…',{fontSize:'16px',color:'#8fdfff'}).setOrigin(.5);
-  sdk.init().finally(()=>this.time.delayedCall(500,()=>this.scene.start('Menu')));
- }
-}
+const VEH:{id:VehicleId;name:string;price:number;speed:number;turn:number;cap:number}[]=[
+{id:'bike',name:'Велосипед',price:0,speed:190,turn:1.25,cap:1},{id:'scooter',name:'Скутер',price:900,speed:235,turn:1.1,cap:2},{id:'moto',name:'Мотоцикл',price:2400,speed:285,turn:.98,cap:3},{id:'car',name:'Автомобиль',price:6200,speed:255,turn:.78,cap:5},{id:'van',name:'Фургон',price:11500,speed:220,turn:.62,cap:8}];
+const UP={engine:{name:'Двигатель',base:450,max:5},brakes:{name:'Тормоза',base:380,max:5},battery:{name:'Батарея',base:420,max:5},bag:{name:'Сумка',base:500,max:5},nav:{name:'Навигация',base:600,max:5}};
+const D=[
+{name:'districtCenter',x:900,y:430,c:0x17384b,pay:1.3,risk:1.2},{name:'districtOld',x:370,y:320,c:0x392b43,pay:1.15,risk:1.1},{name:'districtIndustrial',x:1390,y:850,c:0x493923,pay:1.5,risk:1.55},{name:'districtResidential',x:360,y:820,c:0x214438,pay:1,risk:.8},{name:'districtPort',x:1510,y:270,c:0x23444d,pay:1.75,risk:1.7},{name:'districtSuburbs',x:930,y:1050,c:0x30422e,pay:1.35,risk:.7}];
+const CARGO=['cargoMedicine','cargoDocuments','cargoFood','cargoPackage','cargoParts','cargoBlood'];
+const KINDS:Kind[]=['standard','timed','fragile','multi','highrisk'];
+function v(){return VEH.find(x=>x.id===save.vehicle)!}
+function upCost(k:string){const u=(UP as any)[k];return Math.round(u.base*Math.pow(1.62,save.upgrades[k]||0))}
+function missionName(k:Kind){return t({standard:'missionStandard',timed:'missionTimed',fragile:'missionFragile',multi:'missionMulti',highrisk:'missionHighrisk'}[k])}
+
+class Boot extends Phaser.Scene{constructor(){super('Boot')}create(){this.cameras.main.setBackgroundColor('#061017');const w=this.scale.width,h=this.scale.height;this.add.text(w/2,h/2-38,t('title'),{fontFamily:'Arial Black',fontSize:42,color:'#eaf8ff'}).setOrigin(.5);this.add.text(w/2,h/2+18,t('subtitle'),{fontSize:14,color:'#71a0b5',letterSpacing:3}).setOrigin(.5);this.add.text(w/2,h/2+58,'Loading…',{fontSize:13,color:'#7fe1ff'}).setOrigin(.5);platform.init().finally(()=>this.time.delayedCall(450,()=>this.scene.start('Menu')))}}
 
 class Menu extends Phaser.Scene{
- create(){
-  this.cameras.main.setBackgroundColor('#071018');
-  const w=this.scale.width,h=this.scale.height;
-  this.add.rectangle(w/2,h/2,w,h,0x071018);
-  this.add.circle(w*.72,h*.48,210,0x123044,.6); this.add.circle(w*.72,h*.48,130,0x174c68,.35);
-  this.add.text(w*.09,h*.18,'ПОСЛЕДНИЙ\nКУРЬЕР',{fontFamily:'Arial Black,Arial',fontSize:Math.min(64,w*.065),color:'#e9f7ff',lineSpacing:-6});
-  this.add.text(w*.09,h*.43,'НОВОГРАД. 23:47.\nГород не спит — и тебе тоже нельзя.',{fontSize:18,color:'#8ea9b8',lineSpacing:8});
-  const start=this.button(w*.09,h*.64,'НАЧАТЬ СМЕНУ',()=>this.scene.start('City'));
-  this.button(w*.09,h*.74,'ГАРАЖ',()=>this.scene.start('Garage'));
-  this.button(w*.09,h*.84,'ПРОГРЕСС',()=>this.showProgress());
-  this.add.text(w*.74,h*.86,`ДЕНЬ ${gameSave.day}  •  ${gameSave.money} ₽  •  REP ${gameSave.rep}`,{fontSize:14,color:'#7895a7'}).setOrigin(.5);
-  start.setFocus();
- }
- button(x:number,y:number,label:string,fn:()=>void){const t=this.add.text(x,y,label,{fontFamily:'Arial',fontSize:18,color:'#dff7ff',backgroundColor:'#102331',padding:{left:20,right:20,top:12,bottom:12}}).setInteractive({useHandCursor:true});t.on('pointerdown',fn);t.on('pointerover',()=>t.setColor('#55dcff'));t.on('pointerout',()=>t.setColor('#dff7ff'));return t}
- showProgress(){
-  const ach=gameSave.achievements.length;
-  const t=this.add.text(this.scale.width*.55,this.scale.height*.22,`ПРОГРЕСС\n\nДоставлено: ${gameSave.deliveries}\nЛучшая серия: ${gameSave.best}\nРепутация: ${gameSave.rep}\nДостижения: ${ach}/8\nСюжет: глава ${gameSave.story+1}\n\nESC — закрыть`,{fontSize:17,color:'#d7e8f2',lineSpacing:7,backgroundColor:'#0d1d28',padding:22}).setOrigin(.5);const close=()=>t.destroy();this.input.keyboard?.once('keydown-ESC',close);}
+ create(){this.cameras.main.setBackgroundColor('#061017');const w=this.scale.width,h=this.scale.height;const g=this.add.graphics();g.fillGradientStyle(0x061017,0x061017,0x0c2635,0x061017,1);g.fillRect(0,0,w,h);for(let i=0;i<30;i++){g.fillStyle(0x49cfff,Math.random()*.16);g.fillCircle(Math.random()*w,Math.random()*h,1+Math.random()*2)}this.add.circle(w*.76,h*.45,210,0x0b526d,.22);this.add.circle(w*.76,h*.45,130,0x18a7d0,.12);
+ this.add.text(w*.08,h*.13,t('title'),{fontFamily:'Arial Black',fontSize:Math.min(66,w*.07),color:'#ecf9ff'});this.add.text(w*.08,h*.25,t('subtitle'),{fontSize:16,color:'#6e9caf',letterSpacing:3});this.add.text(w*.08,h*.35,'23:47  •  NOVOGRAD',{fontSize:22,color:'#9ed9ed'});this.add.text(w*.08,h*.41,'A living city. One courier. No second chances.',{fontSize:15,color:'#688493'});
+ this.button(w*.08,h*.54,t('start'),()=>this.scene.start('City'));this.button(w*.08,h*.65,t('garage'),()=>this.scene.start('Garage'));this.button(w*.08,h*.76,t('progress'),()=>this.progress());this.button(w*.08,h*.87,'⚙ '+t('settings'),()=>this.scene.start('Settings'));
+ this.add.text(w*.92,h*.12,`${t('day')} ${save.day}\n${save.money} ₽\nREP ${save.rep}`,{fontSize:15,color:'#9fb7c2',align:'right',lineSpacing:7}).setOrigin(1,0);
+ this.add.text(w*.92,h*.88,t('controls'),{fontSize:11,color:'#4e6d7b',align:'right',wordWrap:{width:w*.45}}).setOrigin(1,1)}
+ button(x:number,y:number,label:string,fn:()=>void){const b=this.add.text(x,y,label,{fontSize:18,color:'#dff7ff',backgroundColor:'#102733',padding:{left:22,right:22,top:12,bottom:12}}).setInteractive({useHandCursor:true});b.on('pointerdown',fn);b.on('pointerover',()=>b.setColor('#5de0ff'));b.on('pointerout',()=>b.setColor('#dff7ff'));return b}
+ progress(){const a=save.achievements.map(id=>t(({first:'achFirst',ten:'achTen',streak:'achStreak',rich:'achRich',rep:'achRep',fleet:'achFleet',story:'achStory',night:'achNight'} as any)[id]||id));this.add.text(this.scale.width*.7,this.scale.height*.42,`${t('progress')}\n\n${t('deliveries')}: ${save.deliveries}\n${t('best')}: ${save.best}\n${t('rep')}: ${save.rep}\n${t('money')}: ${save.money} ₽\n\n${a.join('\n')||'—'}\n\n${t('back')}: ESC`,{fontSize:16,color:'#d8edf4',backgroundColor:'#0b1d27',padding:24,lineSpacing:6}).setOrigin(.5)}
+}
+
+class Settings extends Phaser.Scene{
+ create(){this.cameras.main.setBackgroundColor('#07131b');this.add.text(55,45,t('settings'),{fontFamily:'Arial Black',fontSize:32,color:'#e7f7ff'});this.add.text(55,105,t('language'),{fontSize:16,color:'#87a4b2'});LANGS.forEach(([id,name],i)=>{const b=this.add.text(55+i*180,145,name,{fontSize:16,color:getLang()===id?'#5de0ff':'#d7e7ee',backgroundColor:'#102631',padding:{left:15,right:15,top:10,bottom:10}}).setInteractive();b.on('pointerdown',()=>{save.lang=id;setLang(id);platform.persist();this.scene.restart()})});this.add.text(55,235,t('sound'),{fontSize:16,color:'#87a4b2'});const sound=this.add.text(55,275,'🔊  '+t('on'),{fontSize:16,color:'#d7e7ee',backgroundColor:'#102631',padding:{left:15,right:15,top:10,bottom:10}}).setInteractive();sound.on('pointerdown',()=>sound.setText(sound.text.includes(t('on'))?'🔇  '+t('off'):'🔊  '+t('on')));const back=this.add.text(55,360,'ESC  '+t('back'),{fontSize:15,color:'#7b98a6'});this.input.keyboard?.once('keydown-ESC',()=>this.scene.start('Menu'))}
 }
 
 class Garage extends Phaser.Scene{
- panel!:Phaser.GameObjects.Container; info!:Phaser.GameObjects.Text;
- create(){this.cameras.main.setBackgroundColor('#08131c');this.drawBackdrop();this.render();this.input.keyboard?.on('keydown-ESC',()=>this.scene.start('Menu'));}
- drawBackdrop(){const g=this.add.graphics();g.fillStyle(0x0a151e);g.fillRect(0,0,this.scale.width,this.scale.height);for(let i=0;i<14;i++){g.lineStyle(1,0x203744,.5);g.lineBetween(i*120,0,i*120,this.scale.height)}this.add.text(42,34,'ГАРАЖ', {fontSize:30,color:'#e8f5ff',fontFamily:'Arial Black,Arial'});this.add.text(44,72,'Подготовь транспорт к следующей смене',{fontSize:14,color:'#718c9d'});this.add.text(this.scale.width-44,38,`${gameSave.money} ₽`,{fontSize:24,color:'#ffd36b'}).setOrigin(1,0)}
- render(){if(this.panel)this.panel.destroy();this.panel=this.add.container(42,120);const w=this.scale.width;
-  VEHICLES.forEach((v,i)=>{const unlocked=gameSave.unlocked.includes(v.id);const selected=gameSave.vehicle===v.id;const x=(i%3)*(w*.29),y=Math.floor(i/3)*145;const bg=this.add.rectangle(x+120,y+60,230,116,selected?0x123d4c:0x10202a,.95).setOrigin(.5);bg.setStrokeStyle(selected?2:1,selected?0x54ddff:0x29404c);this.panel.add(bg);
-   this.panel.add(this.add.text(x+18,y+16,`${v.name}${selected?'  ✓':''}`,{fontSize:17,color:'#e3f3fa'}));this.panel.add(this.add.text(x+18,y+44,`скорость ${v.speed}\nгруз ${v.capacity}  •  контроль ${Math.round(v.handling*100)}%`,{fontSize:12,color:'#87a7b7',lineSpacing:4}));
-   const b=this.add.text(x+18,y+98,unlocked?(selected?'ВЫБРАНО':'ВЫБРАТЬ'):`КУПИТЬ ${v.price} ₽`,{fontSize:12,color:unlocked?'#66e4ff':'#ffd36b',backgroundColor:'#0b1820',padding:{left:8,right:8,top:5,bottom:5}}).setInteractive();b.on('pointerdown',()=>{if(unlocked){gameSave.vehicle=v.id;this.render();persist(gameSave)}else if(gameSave.money>=v.price){gameSave.money-=v.price;gameSave.unlocked.push(v.id);gameSave.vehicle=v.id;this.render();sdk.cloud(gameSave)}});this.panel.add(b);
-  });
-  const y=310;this.panel.add(this.add.text(0,y+10,'МОДЕРНИЗАЦИЯ',{fontSize:20,color:'#dceef5'}));UPGRADE.forEach((u,i)=>{const x=(i%3)*(w*.29),yy=y+50+Math.floor(i/3)*100,level=gameSave.upgrades[u.key],max=level>=u.max;this.panel.add(this.add.text(x,yy,`${u.name}  ${level}/${u.max}\n${u.desc}`,{fontSize:14,color:'#b9d0dc',lineSpacing:4}));const b=this.add.text(x+145,yy+4,max?'MAX':`+1  ${upgradeCost(u.key)} ₽`,{fontSize:12,color:max?'#68dc9a':'#ffd36b',backgroundColor:'#12232d',padding:{left:7,right:7,top:6,bottom:6}}).setInteractive();b.on('pointerdown',()=>{const c=upgradeCost(u.key);if(!max&&gameSave.money>=c){gameSave.money-=c;gameSave.upgrades[u.key]++;this.render();sdk.cloud(gameSave)}});this.panel.add(b)});
-  this.panel.add(this.add.text(0,550,'ESC — назад в меню',{fontSize:14,color:'#668696'}));
- }
+ create(){this.cameras.main.setBackgroundColor('#07131b');this.add.text(35,30,t('garage'),{fontFamily:'Arial Black',fontSize:31,color:'#eaf7ff'});this.add.text(35,70,t('garageHint'),{fontSize:14,color:'#6e8c9b'});this.add.text(this.scale.width-35,34,`${save.money} ₽`,{fontSize:22,color:'#ffd36b'}).setOrigin(1,0);const w=this.scale.width;
+ VEH.forEach((x,i)=>{const col=i%3,row=Math.floor(i/3),px=50+col*w*.31,py=125+row*145,ok=save.unlocked.includes(x.id),sel=save.vehicle===x.id;const r=this.add.rectangle(px+110,py+58,220,112,sel?0x123f50:0x0e222d,.95).setStrokeStyle(sel?2:1,sel?0x55dcff:0x29424d);this.add.text(px+18,py+15,x.name,{fontSize:17,color:'#e4f4fa'});this.add.text(px+18,py+45,`${t('speed')}: ${x.speed}\nCAP: ${x.cap}`,{fontSize:12,color:'#89a8b6',lineSpacing:4});const b=this.add.text(px+18,py+88,ok?(sel?'✓ '+t('selected'):t('select')):`${t('buy')} ${x.price} ₽`,{fontSize:12,color:ok?'#5ce0ff':'#ffd36b',backgroundColor:'#0a1820',padding:{left:8,right:8,top:6,bottom:6}}).setInteractive();b.on('pointerdown',()=>{if(ok){save.vehicle=x.id;platform.persist();this.scene.restart()}else if(save.money>=x.price){save.money-=x.price;save.unlocked.push(x.id);save.vehicle=x.id;platform.persist();this.scene.restart()}})});
+ this.add.text(35,420,t('upgrade'),{fontFamily:'Arial Black',fontSize:22,color:'#d9edf4'});Object.entries(UP).forEach(([key,u],i)=>{const x=35+(i%3)*w*.31,y=465+Math.floor(i/3)*90,l=save.upgrades[key]||0,max=l>=u.max;this.add.text(x,y,`${u.name}  ${l}/${u.max}`,{fontSize:15,color:'#b7d1dc'});this.add.text(x,y+25,'●'.repeat(l)+'○'.repeat(u.max-l),{fontSize:12,color:'#58d7f5'});const b=this.add.text(x+145,y+4,max?t('max'):`+1  ${upCost(key)} ₽`,{fontSize:12,color:max?'#6bdc99':'#ffd36b',backgroundColor:'#10232d',padding:{left:8,right:8,top:6,bottom:6}}).setInteractive();b.on('pointerdown',()=>{const c=upCost(key);if(!max&&save.money>=c){save.money-=c;save.upgrades[key]=l+1;platform.persist();this.scene.restart()}})});this.add.text(35,this.scale.height-30,'ESC  '+t('back'),{fontSize:14,color:'#658391'});this.input.keyboard?.once('keydown-ESC',()=>this.scene.start('Menu'))}
 }
 
-interface Job{x:number;y:number;reward:number;deadline:number;district:number;kind:MissionKind;name:string;steps:number;done:number;active:boolean}
-
+interface Job{x:number;y:number;from:number;to:number;reward:number;deadline:number;kind:Kind;cargo:string;step:number;active:boolean}
 class City extends Phaser.Scene{
- player!:Phaser.Physics.Arcade.Sprite; bodySprite!:Phaser.GameObjects.Container; cursors!:Phaser.Types.Input.Keyboard.CursorKeys; keys!:any;
- jobs:Job[]=[]; jobG!:Phaser.GameObjects.Graphics; hud!:Phaser.GameObjects.Text; mission!:Phaser.GameObjects.Text; toast!:Phaser.GameObjects.Text; minimap!:Phaser.GameObjects.Graphics;
- traffic:{r:Phaser.GameObjects.Rectangle;vx:number;vy:number}[]=[]; pedestrians:Phaser.GameObjects.Arc[]=[];
- current?:Job; fuel=100; worldTime=0; weather:Weather='clear'; weatherTimer=35; eventTimer=20; dayStart=0; paused=false; particles?:Phaser.GameObjects.Particles.ParticleEmitter;
-
- create(){
-  this.physics.world.setBounds(0,0,1800,1200);this.cameras.main.setBounds(0,0,1800,1200);this.cameras.main.setZoom(1);
-  this.makeWorld();this.makePlayer();this.makeJobs();this.makeTraffic();this.makePeople();this.makeUI();
-  this.cursors=this.input.keyboard!.createCursorKeys();this.keys=this.input.keyboard!.addKeys('W,A,S,D,SHIFT,E,M,G,ESC');
-  this.input.keyboard?.on('keydown-M',()=>this.toggleMap());this.input.keyboard?.on('keydown-G',()=>this.scene.start('Garage'));this.input.keyboard?.on('keydown-ESC',()=>this.scene.start('Menu'));
-  this.input.keyboard?.on('keydown-E',()=>this.interact());
-  this.dayStart=0;this.changeWeather('clear');
- }
- makeWorld(){const g=this.add.graphics();g.fillStyle(0x08131b);g.fillRect(0,0,1800,1200);
-  DISTRICTS.forEach(d=>{g.fillStyle(d.color,.55);g.fillRect(d.x-300,d.y-220,600,440)});
-  // city grid and avenues
-  for(let x=55;x<1800;x+=150){g.fillStyle(0x15262f);g.fillRect(x,0,58,1200);g.fillStyle(0x32464f,.9);for(let y=12;y<1200;y+=52)g.fillRect(x+27,y,4,25)}
-  for(let y=60;y<1200;y+=170){g.fillStyle(0x172830);g.fillRect(0,y,1800,72);g.fillStyle(0x33464d,.9);for(let x=8;x<1800;x+=58)g.fillRect(x,y+34,27,4)}
-  // blocks/buildings
-  for(let i=0;i<115;i++){const x=20+Math.floor(Math.random()*59)*30,y=18+Math.floor(Math.random()*39)*28;if((x%150)<60&&(y%170)<72)continue;const ww=18+Math.random()*35,hh=14+Math.random()*28;g.fillStyle(0x1c2d35,.9);g.fillRect(x,y,ww,hh);g.fillStyle(0x3d6570,.35);g.fillRect(x+4,y+4,ww-8,3)}
-  DISTRICTS.forEach((d,i)=>{this.add.text(d.x,d.y-195,d.name,{fontSize:16,color:'#9bb7c2',fontFamily:'Arial Black,Arial'}).setOrigin(.5);if(i===0)this.add.circle(d.x,d.y,65,0x4edbff,.05)});
-  // landmarks
-  g.fillStyle(0x365462);g.fillRect(835,385,130,75);g.fillStyle(0x5a8b9a);g.fillRect(880,345,40,40);g.fillStyle(0x213a46);g.fillRect(1310,740,130,90);
- }
- makePlayer(){this.player=this.physics.add.sprite(300,620,'__DEFAULT');this.player.setVisible(false);this.player.setCollideWorldBounds(true);this.bodySprite=this.add.container(this.player.x,this.player.y);const shadow=this.add.ellipse(0,9,44,14,0x000000,.35);const bike=this.add.rectangle(0,0,34,17,0x42d9ff);bike.setStrokeStyle(2,0xbdf4ff);const light=this.add.circle(18,0,4,0xeaffff);this.bodySprite.add([shadow,bike,light]);this.cameras.main.startFollow(this.player,true,.09,.09)}
- makeJobs(){this.jobG=this.add.graphics();const names=['Экспресс','Аптека','Документы','Запчасти','Анонимная посылка','Еда','Срочный пакет'];const kinds:MissionKind[]=['standard','timed','fragile','multi','highrisk'];for(let i=0;i<10;i++){const d=i%DISTRICTS.length,dist=DISTRICTS[d];const x=clamp(dist.x-220+Math.random()*440,50,1750),y=clamp(dist.y-160+Math.random()*320,50,1150);this.jobs.push({x,y,reward:Math.round((90+Math.random()*160)*dist.pay),deadline:42+Math.random()*35,district:d,kind:kinds[i%kinds.length],name:names[i%names.length],steps:kinds[i%kinds.length]==='multi'?2:1,done:0,active:false})}}
- makeTraffic(){for(let i=0;i<22;i++){const horizontal=i%2===0;const r=this.add.rectangle(horizontal?Math.random()*1800:90+Math.floor(Math.random()*12)*150, horizontal?60+Math.floor(Math.random()*7)*170:Math.random()*1200,26,14,0x6b8995,.8);this.traffic.push({r,vx:horizontal?(55+Math.random()*80)*(i%4?1:-1):0,vy:horizontal?0:(55+Math.random()*80)*(i%3?1:-1)})}}
- makePeople(){for(let i=0;i<26;i++){const p=this.add.circle(Math.random()*1800,Math.random()*1200,3,0xd6c7aa,.55);this.pedestrians.push(p);}}
- makeUI(){const fixed=(o:Phaser.GameObjects.GameObject)=>o.setScrollFactor(0).setDepth(100);
-  this.hud=fixed(this.add.text(20,18,'',{fontSize:16,color:'#e6f3f7',lineSpacing:5}));
-  this.mission=fixed(this.add.text(20,105,'',{fontSize:15,color:'#9edcf0',backgroundColor:'#0b1b24',padding:{left:12,right:12,top:9,bottom:9},lineSpacing:5}));
-  this.toast=fixed(this.add.text(this.scale.width/2,this.scale.height-65,'',{fontSize:17,color:'#effaff',backgroundColor:'#0d2632',padding:{left:18,right:18,top:9,bottom:9}}).setOrigin(.5));
-  this.add.text(this.scale.width-20,18,'E — взять заказ   G — гараж   M — карта',{fontSize:12,color:'#7896a5'}).setOrigin(1,0).setScrollFactor(0).setDepth(100);
-  this.minimap=fixed(this.add.graphics());this.drawMini();
- }
- drawMini(){const x=this.scale.width-188,y=52,w=168,h=112;this.minimap.clear();this.minimap.fillStyle(0x07131b,.92);this.minimap.fillRect(x,y,w,h);this.minimap.lineStyle(1,0x34515f);this.minimap.strokeRect(x,y,w,h);for(const d of DISTRICTS){this.minimap.fillStyle(d.color,.9);this.minimap.fillCircle(x+d.x/1800*w,y+d.y/1200*h,7)}for(const j of this.jobs){if(j.active)this.minimap.fillStyle(0x63e3ff);else this.minimap.fillStyle(0xf5c85c);this.minimap.fillCircle(x+j.x/1800*w,y+j.y/1200*h,2)}this.minimap.fillStyle(0xffffff);this.minimap.fillCircle(x+this.player.x/1800*w,y+this.player.y/1200*h,3);}
- interact(){if(this.current)return;let best:Job|undefined,dist=999;for(const j of this.jobs){if(j.active)continue;const d=Phaser.Math.Distance.Between(this.player.x,this.player.y,j.x,j.y);if(d<dist&&d<125){best=j;dist=d}}if(best)this.accept(best);else this.notify('Подъедь ближе к жёлтой точке');}
- accept(j:Job){this.current=j;j.active=true;j.deadline+=gameSave.upgrades.nav*5;this.mission.setText(this.missionText());this.notify(`${j.name} принят • доставь груз`);}
- missionText(){if(!this.current)return'СВОБОДНЫЙ РЕЖИМ\nЖёлтые точки — доступные заказы';const j=this.current;const left=Math.ceil(j.deadline);const d=DISTRICTS[j.district];const extra=j.kind==='timed'?'СРОЧНО':j.kind==='fragile'?'ХРУПКО':j.kind==='multi'?'МАРШРУТ x2':j.kind==='highrisk'?'ВЫСОКИЙ РИСК':'СТАНДАРТ';return`ЗАКАЗ: ${j.name}\n${d.name} • ${j.reward} ₽ • ${extra}\nОсталось ${left} сек • E — взаимодействие`}
- update(_t:number,dt:number){if(this.paused)return;const sec=dt/1000;this.worldTime+=sec;this.weatherTimer-=sec;this.eventTimer-=sec;
-  if(this.weatherTimer<=0){this.weatherTimer=45+Math.random()*45;const ws:Weather[]=['clear','rain','fog','storm'];this.changeWeather(ws[Math.floor(Math.random()*ws.length)])}
-  if(this.eventTimer<=0){this.eventTimer=30+Math.random()*45;if(Math.random()<.7)this.roadEvent()}
-  this.movePlayer(dt);this.moveTraffic(sec);this.movePeople(sec);this.updateMission(sec);this.updateVisuals(sec);this.hud.setText(`НОВОГРАД  •  ДЕНЬ ${gameSave.day}  ${this.clock()}\n${this.weather.toUpperCase()}  •  ${vehicle().name}\nСкорость ${Math.round(this.speed())}  •  Энергия ${Math.round(this.fuel)}%\nREP ${gameSave.rep}  •  Серия x${gameSave.streak}  •  ${gameSave.money} ₽`);this.mission.setText(this.missionText());this.drawMini();
- }
- movePlayer(dt:number){const k=this.keys;let dx=0,dy=0;if(this.cursors.left.isDown||k.A.isDown)dx--;if(this.cursors.right.isDown||k.D.isDown)dx++;if(this.cursors.up.isDown||k.W.isDown)dy--;if(this.cursors.down.isDown||k.S.isDown)dy++;const boost=k.SHIFT.isDown&&this.fuel>0;const v=vehicle();const s=v.speed+gameSave.upgrades.engine*18;const weatherMult=this.weather==='rain'?.9:this.weather==='storm'?.78:1;const sp=s*weatherMult*(boost?1.65:1)*(v.handling+gameSave.upgrades.brakes*.035);if(dx||dy){const vec=new Phaser.Math.Vector2(dx,dy).normalize().scale(sp);this.player.setVelocity(vec.x,vec.y);this.bodySprite.rotation=vec.angle();if(boost)this.fuel=Math.max(0,this.fuel-dt*.018*(1+gameSave.upgrades.engine*.1));else this.fuel=Math.min(this.maxFuel(),this.fuel+dt*.006)}else{this.player.setVelocity(0);this.fuel=Math.min(this.maxFuel(),this.fuel+dt*.012)}this.bodySprite.setPosition(this.player.x,this.player.y)}
- speed(){return Math.hypot(this.player.body?.velocity.x||0,this.player.body?.velocity.y||0)}
- maxFuel(){return 100+gameSave.upgrades.battery*18}
- moveTraffic(sec:number){for(const q of this.traffic){q.r.x+=q.vx*sec;q.r.y+=q.vy*sec;if(q.r.x>1830)q.r.x=-30;if(q.r.x<-30)q.r.x=1830;if(q.r.y>1230)q.r.y=-30;if(q.r.y<-30)q.r.y=1230;const d=Phaser.Math.Distance.Between(this.player.x,this.player.y,q.r.x,q.r.y);if(d<25&&this.speed()>70){this.fuel=Math.max(0,this.fuel-7);gameSave.streak=0;this.notify('СТОЛКНОВЕНИЕ • -7% энергии • серия сбита');q.r.x+=q.vx>0?-45:45}}}
- movePeople(sec:number){this.pedestrians.forEach((p,i)=>{p.x+=Math.sin(this.worldTime*.7+i)*sec*4;p.y+=Math.cos(this.worldTime*.5+i)*sec*3})}
- updateMission(sec:number){const j=this.current;if(!j)return;j.deadline-=sec;const d=Phaser.Math.Distance.Between(this.player.x,this.player.y,j.x,j.y);if(j.deadline<=0){j.active=false;this.current=undefined;gameSave.streak=0;this.notify('ЗАКАЗ ПРОВАЛЕН • серия сбита');return}if(d<38){if(j.steps>1&&j.done<1){j.done=1;j.x=clamp(j.x+(Math.random()-.5)*300,60,1740);j.y=clamp(j.y+(Math.random()-.5)*220,60,1140);j.deadline+=25;this.notify('ПРОМЕЖУТОЧНАЯ ТОЧКА ✓ • следуй дальше');return}this.complete(j)}}
- complete(j:Job){const bonus=j.kind==='timed'?1.25:j.kind==='fragile'?1.18:j.kind==='highrisk'?1.4:j.kind==='multi'?1.3:1;const streakBonus=1+Math.min(gameSave.streak,10)*.04;const reward=Math.round(j.reward*bonus*streakBonus);gameSave.money+=reward;gameSave.rep+=j.kind==='highrisk'?5:3;gameSave.deliveries++;gameSave.streak++;gameSave.best=Math.max(gameSave.best,gameSave.streak);gameSave.story=Math.min(7,Math.floor(gameSave.deliveries/5));j.active=false;this.current=undefined;this.notify(`ДОСТАВЛЕНО ✓  +${reward} ₽  • серия x${gameSave.streak}`);this.achievementCheck();persist(gameSave);sdk.cloud(gameSave);if(gameSave.deliveries%5===0)sdk.fullscreen()}
- achievementCheck(){const tests:[string,boolean][]=[['first',gameSave.deliveries>=1],['ten',gameSave.deliveries>=10],['streak5',gameSave.best>=5],['rich',gameSave.money>=5000],['rep50',gameSave.rep>=50],['allvehicles',gameSave.unlocked.length>=5],['story',gameSave.story>=7],['nightowl',this.worldTime>=180]];tests.forEach(([id,ok])=>{if(ok&&!gameSave.achievements.includes(id)){gameSave.achievements.push(id);this.notify(`ДОСТИЖЕНИЕ: ${id.toUpperCase()} ✓`)}})}
- roadEvent(){const names=['ПЕРЕКРЫТИЕ','ДТП','ПОЛИЦЕЙСКИЙ КОНТРОЛЬ','СБОЙ СВЕТОФОРОВ'];this.notify(`${names[Math.floor(Math.random()*names.length)]} • объедь участок`);const g=this.add.graphics().setDepth(8);const x=150+Math.random()*1500,y=100+Math.random()*1000;g.fillStyle(0xff735c,.28);g.fillCircle(x,y,55);this.tweens.add({targets:g,alpha:0,duration:8000,onComplete:()=>g.destroy()})}
- changeWeather(w:Weather){this.weather=w;const g=this.add.graphics().setScrollFactor(0).setDepth(80);if(w==='rain'||w==='storm'){for(let i=0;i<120;i++){g.lineStyle(1,0x8fc7e8,w==='storm'?.35:.2);const x=Math.random()*this.scale.width,y=Math.random()*this.scale.height;g.lineBetween(x,y,x-3,y+14)}}else if(w==='fog'){g.fillStyle(0x8796a0,.16);g.fillRect(0,0,this.scale.width,this.scale.height)}this.tweens.add({targets:g,alpha:0,duration:4200,onComplete:()=>g.destroy()});this.notify(`ПОГОДА: ${w.toUpperCase()}`)}
- updateVisuals(sec:number){const night=0.08+Math.sin(this.worldTime/55)*.03;this.cameras.main.setAlpha(1-night*.2);if(this.worldTime-this.dayStart>360){gameSave.day++;this.dayStart=this.worldTime;persist(gameSave);this.notify(`НОВЫЙ ДЕНЬ • ДЕНЬ ${gameSave.day}`)}}
- clock(){const minutes=Math.floor((this.worldTime/2)%360);const h=18+Math.floor(minutes/60),m=minutes%60;return`${String(h%24).padStart(2,'0')}:${String(m).padStart(2,'0')}`}
- notify(text:string){this.toast.setText(text);this.toast.setAlpha(1);this.tweens.killTweensOf(this.toast);this.tweens.add({targets:this.toast,alpha:0,delay:2300,duration:700})}
- toggleMap(){this.cameras.main.zoom=this.cameras.main.zoom>1?1:1.45;this.notify(this.cameras.main.zoom>1?'КАРТА: обзор города':'КАРТА: обычный режим')}
+ p!:Phaser.GameObjects.Container;jobs:Job[]=[];traffic:{o:Phaser.GameObjects.Rectangle;vx:number;vy:number}[]=[];hud!:Phaser.GameObjects.Text;panel!:Phaser.GameObjects.Text;toast!:Phaser.GameObjects.Text;mini!:Phaser.GameObjects.Graphics;overlay!:Phaser.GameObjects.Rectangle;weather:Weather='clear';weatherT=40;eventT=28;clock=0;energy=100;boost=0;current?:Job;map=false;rain:number[][]=[];adLock=false;
+ create(){this.physics.world.setBounds(0,0,1800,1200);this.cameras.main.setBounds(0,0,1800,1200);this.makeWorld();this.makePlayer();this.makeJobs();this.makeTraffic();this.makeUI();this.bind();this.changeWeather('clear');this.newToast(t('shiftComplete'));window.addEventListener('lc-ad-open',this.pauseForAd);window.addEventListener('lc-ad-close',this.resumeAfterAd)}
+ shutdown(){window.removeEventListener('lc-ad-open',this.pauseForAd);window.removeEventListener('lc-ad-close',this.resumeAfterAd)}
+ pauseForAd=()=>{this.adLock=true;this.scene.pause()};resumeAfterAd=()=>{this.adLock=false;this.scene.resume()};
+ bind(){const kb=this.input.keyboard!;kb.on('keydown-E',()=>this.interact());kb.on('keydown-M',()=>this.toggleMap());kb.on('keydown-G',()=>this.scene.start('Garage'));kb.on('keydown-ESC',()=>this.scene.start('Menu'));window.addEventListener('blur',()=>{if(!this.adLock)this.scene.pause()});window.addEventListener('focus',()=>{if(!this.adLock)this.scene.resume()})}
+ makeWorld(){const g=this.add.graphics();g.fillStyle(0x07131b);g.fillRect(0,0,1800,1200);D.forEach(d=>{g.fillStyle(d.c,.7);g.fillRect(d.x-300,d.y-210,600,420)});for(let x=20;x<1800;x+=150){g.fillStyle(0x14252e);g.fillRect(x,0,64,1200);g.lineStyle(2,0x4a646d,.38);for(let y=10;y<1200;y+=48)g.lineBetween(x+31,y,x+31,y+22)}for(let y=45;y<1200;y+=170){g.fillStyle(0x162830);g.fillRect(0,y,1800,72);g.lineStyle(2,0x526970,.35);for(let x=10;x<1800;x+=52)g.lineBetween(x,y+36,x+25,y+36)}for(let i=0;i<170;i++){const x=Math.floor(Math.random()*59)*30+8,y=Math.floor(Math.random()*39)*30+8;const r=(x%150<64)&&(y%170<72);if(r)continue;g.fillStyle(0x20323b,.95);g.fillRect(x,y,20+Math.random()*32,16+Math.random()*26);if(Math.random()>.35){g.fillStyle(0x77d9e5,.14);g.fillRect(x+5,y+5,3,3)}}D.forEach(d=>{g.lineStyle(2,0x65e2ff,.22);g.strokeCircle(d.x,d.y,92);this.add.text(d.x,d.y-112,t(d.name),{fontSize:11,color:'#8bb6c4',backgroundColor:'#07141b',padding:4}).setOrigin(.5)});this.add.text(900,600,'NOVOGRAD',{fontFamily:'Arial Black',fontSize:54,color:'#7ad8ff',alpha:.035}).setOrigin(.5)}
+ makePlayer(){this.p=this.add.container(900,600);this.p.setDepth(20);this.add.ellipse(0,9,32,13,0x000000,.35).setDepth(19);const body=this.add.rectangle(0,0,23,38,0x43d8ff).setStrokeStyle(2,0xc9f9ff);this.p.add(body);this.p.add(this.add.triangle(0,-23,0,-8,8,5,-8,5,0xefffff));this.p.add(this.add.circle(0,-8,4,0xefffff));this.cameras.main.startFollow(this.p,true,.08,.08)}
+ makeJobs(){this.jobs=[];for(let i=0;i<10;i++)this.spawnJob(i)}
+ spawnJob(i:number){const from=Math.floor(Math.random()*D.length),to=Math.floor(Math.random()*D.length);const a=D[from],b=D[to===from?(to+1)%D.length:to];const kind=KINDS[Math.floor(Math.random()*KINDS.length)];const mult=1+(kind==='timed'?.35:kind==='fragile'?.28:kind==='multi'?.55:kind==='highrisk'?.9:0);this.jobs[i]={x:a.x+(Math.random()-.5)*160,y:a.y+(Math.random()-.5)*130,from,to:to===from?(to+1)%D.length:to,reward:Math.round((240+Math.random()*320)*a.pay*mult),deadline:kind==='timed'?35+Math.random()*25:75+Math.random()*45,kind,cargo:CARGO[Math.floor(Math.random()*CARGO.length)],step:0,active:false}}
+ makeTraffic(){for(let i=0;i<34;i++){const horizontal=Math.random()>.5;const o=this.add.rectangle(Math.random()*1800,Math.random()*1200,30,12,Math.random()>.5?0x68818c:0x9a5362,.72);o.setDepth(8);this.traffic.push({o,vx:horizontal?(Math.random()>.5?1:-1)*(40+Math.random()*70):0,vy:horizontal?0:(Math.random()>.5?1:-1)*(40+Math.random()*70)})}}
+ makeUI(){this.hud=this.add.text(18,18,'',{fontSize:14,color:'#d9f1f7',lineSpacing:5,backgroundColor:'#07161fdd',padding:12}).setScrollFactor(0).setDepth(100);this.panel=this.add.text(this.scale.width-18,18,'',{fontSize:14,color:'#d9f1f7',align:'right',backgroundColor:'#07161fdd',padding:12}).setOrigin(1,0).setScrollFactor(0).setDepth(100);this.toast=this.add.text(this.scale.width/2,this.scale.height-70,'',{fontSize:16,color:'#e9fbff',backgroundColor:'#09202bdd',padding:{left:16,right:16,top:10,bottom:10}}).setOrigin(.5).setScrollFactor(0).setDepth(110);this.mini=this.add.graphics().setScrollFactor(0).setDepth(100);this.overlay=this.add.rectangle(this.scale.width/2,this.scale.height/2,this.scale.width,this.scale.height,0x061018,.72).setScrollFactor(0).setDepth(150).setVisible(false)}
+ newToast(s:string){this.toast.setText(s).setAlpha(1);this.tweens.add({targets:this.toast,alpha:0,delay:1700,duration:500})}
+ interact(){if(this.current){if(dist(this.p,this.current)<125){if(this.current.step===0){this.current.step=1;this.newToast(t('deliver'))}else{this.complete()}}return}let best:Job|undefined;let bd=140;for(const j of this.jobs){const dd=dist(this.p,j);if(dd<bd){best=j;bd=dd}}if(best){this.current=best;best.active=true;this.panel.setText(`${missionName(best.kind)}\n${t(best.cargo)}\n${best.reward} ₽`);this.newToast(t('accept'))}}
+ complete(){const j=this.current!;const elapsed=performance.now();void elapsed;let bonus=1;if(j.kind==='timed')bonus+=Math.max(0,(j.deadline-this.clock%100)/j.deadline)*.35;if(j.kind==='fragile')bonus+=.28;if(j.kind==='highrisk')bonus+=.4;if(save.adBoost){bonus*=1.25;save.adBoost=0}const reward=Math.round(j.reward*bonus*(1+Math.min(save.streak,8)*.05));save.money+=reward;save.rep+=j.kind==='highrisk'?4:2;save.deliveries++;save.streak++;save.best=Math.max(save.best,save.streak);this.checkAchievements();platform.persist();platform.score();this.newToast(`+${reward} ₽  •  REP +${j.kind==='highrisk'?4:2}`);if(save.deliveries%5===0)platform.adFull();if(save.deliveries%5===0&&save.story<3){save.story++;platform.persist();this.story()};this.spawnJob(this.jobs.indexOf(j));this.current=undefined;this.panel.setText('')}
+ checkAchievements(){const checks:[string,boolean][]=[['first',save.deliveries>=1],['ten',save.deliveries>=10],['streak',save.best>=5],['rich',save.money>=5000],['rep',save.rep>=50],['fleet',save.unlocked.length>=5],['story',save.story>=3],['night',save.day>=5]];for(const [id,ok] of checks)if(ok&&!save.achievements.includes(id)){save.achievements.push(id);this.newToast(`${t('newAchievement')}: ${t(({first:'achFirst',ten:'achTen',streak:'achStreak',rich:'achRich',rep:'achRep',fleet:'achFleet',story:'achStory',night:'achNight'} as any)[id])}`)}}
+ story(){const lines=['story1','story2','story3'];this.showModal(`${t('storyChapter')} ${save.story}\n\n${t(lines[save.story-1])}`,t('next'))}
+ showModal(text:string,button:string){this.overlay.setVisible(true);const box=this.add.text(this.scale.width/2,this.scale.height/2,text,{fontSize:18,color:'#e5f7fc',align:'center',wordWrap:{width:this.scale.width*.72},backgroundColor:'#0a1e29',padding:30,lineSpacing:8}).setOrigin(.5).setScrollFactor(0).setDepth(151);const b=this.add.text(this.scale.width/2,this.scale.height/2+120,button,{fontSize:16,color:'#62ddff',backgroundColor:'#123644',padding:{left:18,right:18,top:10,bottom:10}}).setOrigin(.5).setInteractive().setScrollFactor(0).setDepth(151);b.once('pointerdown',()=>{box.destroy();b.destroy();this.overlay.setVisible(false)})}
+ changeWeather(w:Weather){this.weather=w;this.weatherT=45+Math.random()*50;this.rain=[];if(w==='rain'||w==='storm')for(let i=0;i<120;i++)this.rain.push([Math.random()*this.scale.width,Math.random()*this.scale.height,3+Math.random()*7]);this.newToast(t(({clear:'weatherClear',rain:'weatherRain',fog:'weatherFog',storm:'weatherStorm'} as any)[w]))}
+ toggleMap(){this.map=!this.map;if(this.map){this.showModal(`${t('map')}\n\n${D.map(x=>t(x.name)).join('  •  ')}`,t('close'))}}
+ update(_time:number,dt:number){if(this.overlay.visible)return;const d=dt/1000;this.clock+=d;this.weatherT-=d;this.eventT-=d;if(this.weatherT<0){const ws:Weather[]=['clear','rain','fog','storm'];this.changeWeather(ws[Math.floor(Math.random()*ws.length)])}if(this.eventT<0){this.eventT=45+Math.random()*55;const ev=['eventAccident','eventCheckpoint','eventClosure','eventLights'][Math.floor(Math.random()*4)];this.newToast(t(ev))}
+  const kb=this.input.keyboard!;let dx=(kb.addKey(Phaser.Input.Keyboard.KeyCodes.D).isDown?1:0)-(kb.addKey(Phaser.Input.Keyboard.KeyCodes.A).isDown?1:0);let dy=(kb.addKey(Phaser.Input.Keyboard.KeyCodes.S).isDown?1:0)-(kb.addKey(Phaser.Input.Keyboard.KeyCodes.W).isDown?1:0);dx+=(kb.createCursorKeys().right.isDown?1:0)-(kb.createCursorKeys().left.isDown?1:0);dy+=(kb.createCursorKeys().down.isDown?1:0)-(kb.createCursorKeys().up.isDown?1:0);const len=Math.hypot(dx,dy)||1;const boost=kb.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT).isDown&&this.energy>3;let speed=v().speed*(1+(save.upgrades.engine||0)*.055)*(boost?1.55:1);if(this.weather==='storm')speed*=.82;if(this.weather==='fog')speed*=.9;if(dx||dy){this.p.x=clamp(this.p.x+dx/len*speed*d,30,1770);this.p.y=clamp(this.p.y+dy/len*speed*d,30,1170);if(boost)this.energy=clamp(this.energy-28*d,0,100);else this.energy=clamp(this.energy+.9*d,0,100)}else this.energy=clamp(this.energy+1.8*d,0,100);
+  this.traffic.forEach(q=>{q.o.x+=q.vx*d;q.o.y+=q.vy*d;if(q.o.x<0||q.o.x>1800)q.vx*=-1;if(q.o.y<0||q.o.y>1200)q.vy*=-1;if(dist(this.p,q.o)<23){this.energy=clamp(this.energy-22*d,0,100);this.p.x=clamp(this.p.x-q.vx*d*1.8,30,1770);this.p.y=clamp(this.p.y-q.vy*d*1.8,30,1170)}});
+  if(this.current&&this.current.step===1){this.current.deadline-=d;if(this.current.deadline<=0){this.newToast('TIMEOUT');this.current=undefined;save.streak=0;platform.persist()}}this.drawWeather();this.updateHUD();this.updateMini()}
+ drawWeather(){const g=this.add.graphics().setScrollFactor(0).setDepth(90);if(this.weather==='rain'||this.weather==='storm'){g.lineStyle(this.weather==='storm'?2:1,0x8bdcff,this.weather==='storm'?.4:.22);for(const r of this.rain)g.lineBetween(r[0],r[1],r[0]-3,r[1]+r[2]*5)}if(this.weather==='fog')g.fillStyle(0xb7dbe3,.08),g.fillRect(0,0,this.scale.width,this.scale.height);this.time.delayedCall(16,()=>g.destroy())}
+ updateHUD(){const mins=Math.floor(this.clock/60),secs=Math.floor(this.clock%60).toString().padStart(2,'0');this.hud.setText(`${t('day')} ${save.day}  •  ${23+(Math.floor((mins)/60))%2}:${secs}\n${t('money')}: ${save.money} ₽   ${t('rep')}: ${save.rep}\n${t('energy')}: ${Math.round(this.energy)}%   ${t('deliveries')}: ${save.deliveries}`);this.panel.setText(this.current?`${missionName(this.current.kind)}\n${this.current.reward} ₽\n${Math.ceil(this.current.deadline)}s`:`${t('weather')}: ${t(({clear:'weatherClear',rain:'weatherRain',fog:'weatherFog',storm:'weatherStorm'} as any)[this.weather])}\n${t('speed')}: ${Math.round(v().speed)}`)}
+ updateMini(){this.mini.clear();const x=this.scale.width-170,y=this.scale.height-120,w=145,h=92;this.mini.fillStyle(0x07161f,.9);this.mini.fillRect(x,y,w,h);this.mini.lineStyle(1,0x3c6877,.8);this.mini.strokeRect(x,y,w,h);this.mini.fillStyle(0x5de0ff,1);this.mini.fillCircle(x+this.p.x/1800*w,y+this.p.y/1200*h,3);this.jobs.forEach(j=>{this.mini.fillStyle(j===this.current?0xffd36b:0x4d9aaf,.8);this.mini.fillCircle(x+j.x/1800*w,y+j.y/1200*h,2)})}
 }
 
-new Phaser.Game({type:Phaser.AUTO,parent:'game',width:1280,height:720,backgroundColor:'#071018',physics:{default:'arcade',arcade:{gravity:{x:0,y:0},debug:false}},scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH},scene:[Boot,Menu,City,Garage],render:{antialias:true,pixelArt:false},input:{activePointers:3}});
+const config:Phaser.Types.Core.GameConfig={type:Phaser.AUTO,parent:'game',backgroundColor:'#061017',scale:{mode:Phaser.Scale.RESIZE,width:1280,height:720},render:{antialias:true,powerPreference:'high-performance'},scene:[Boot,Menu,Settings,Garage,City]};
+new Phaser.Game(config);
